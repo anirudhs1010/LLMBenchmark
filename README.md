@@ -1,4 +1,4 @@
 # LLM Benchmark
 
 This is a NextJS starter in Firebase Studio. 
-This web app aims to try and benchmark generated Gemini prompts with Llama, DeepSeek, and Mistral.
+This web app generates Gemini prompts for stories and benchmarks them Perplexity Sonar and R1.

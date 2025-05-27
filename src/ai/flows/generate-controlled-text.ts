@@ -14,7 +14,7 @@ import {z} from 'genkit';
 const GenerateControlledTextInputSchema = z.object({
   prompt: z.string().describe('The main prompt or topic for text generation.'),
   targetLength: z.string().optional().describe('A description of the desired length (e.g., "around 500 words", "a short paragraph").'),
-  style: z.string().optional().describe('The desired style or tone of the text (e.g., "Formal", "Humorous", "Technical").'),
+  style: z.string().optional().describe('The desired style or tone of the text (e.g., "Formal", "Humorous", "Technical").0'),
 });
 export type GenerateControlledTextInput = z.infer<typeof GenerateControlledTextInputSchema>;
 

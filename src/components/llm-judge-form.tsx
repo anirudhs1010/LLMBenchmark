@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -5,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useState, useTransition } from 'react';
 import { ratePrompt, type RatePromptOutput } from '@/ai/flows/llm-rating';
+import { generateControlledText, type GenerateControlledTextOutput } from '@/ai/flows/generate-controlled-text';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -17,11 +19,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import { ResultsDisplay } from '@/components/results-display';
 import { ExportButton } from '@/components/export-button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, Zap, Loader2 } from 'lucide-react';
+import { Terminal, Zap, Loader2, PenTool } from 'lucide-react';
 
 const formSchema = z.object({
   prompt: z.string().min(10, {
@@ -29,11 +33,16 @@ const formSchema = z.object({
   }).max(2000, {
     message: 'Prompt must not exceed 2000 characters.',
   }),
+  targetLength: z.string().optional(),
+  style: z.string().optional(),
 });
 
+const styleOptions = ["Neutral", "Formal", "Humorous", "Creative", "Technical", "Persuasive", "Informative"];
+
 export function LlmJudgeForm() {
-  const [results, setResults] = useState<RatePromptOutput | null>(null);
-  const [submittedPrompt, setSubmittedPrompt] = useState<string | null>(null);
+  const [ratings, setRatings] = useState<RatePromptOutput | null>(null);
+  const [generatedText, setGeneratedText] = useState<string | null>(null);
+  const [originalPrompt, setOriginalPrompt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -42,30 +51,54 @@ export function LlmJudgeForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       prompt: '',
+      targetLength: 'around 200 words',
+      style: 'Neutral',
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setError(null);
-    setResults(null);
-    setSubmittedPrompt(null);
+    setRatings(null);
+    setGeneratedText(null);
+    setOriginalPrompt(null);
 
     startTransition(async () => {
       try {
-        const aiResult = await ratePrompt({ prompt: values.prompt });
-        setResults(aiResult);
-        setSubmittedPrompt(values.prompt);
+        toast({
+          title: 'Generating Text...',
+          description: 'The AI is crafting your text based on the controls.',
+        });
+        const generationResult = await generateControlledText({
+          prompt: values.prompt,
+          targetLength: values.targetLength,
+          style: values.style,
+        });
+        
+        if (!generationResult || !generationResult.generatedText) {
+          throw new Error('Text generation failed to produce content.');
+        }
+        setGeneratedText(generationResult.generatedText);
+        setOriginalPrompt(values.prompt);
+
+        toast({
+          title: 'Text Generated!',
+          description: 'Now, AI judges are evaluating the generated text.',
+        });
+
+        const aiRatings = await ratePrompt({ prompt: generationResult.generatedText });
+        setRatings(aiRatings);
+        
         toast({
           title: 'Success!',
-          description: 'Prompt rated successfully by AI judges.',
+          description: 'Text generated and rated successfully.',
         });
       } catch (e: any) {
-        console.error('Error rating prompt:', e);
+        console.error('Error in generation/rating process:', e);
         const errorMessage = e.message || 'An unexpected error occurred.';
         setError(errorMessage);
         toast({
           title: 'Error',
-          description: `Failed to rate prompt: ${errorMessage}`,
+          description: `Process failed: ${errorMessage}`,
           variant: 'destructive',
         });
       }
@@ -81,33 +114,85 @@ export function LlmJudgeForm() {
             name="prompt"
             render={({ field }) => (
               <FormItem>
-                <FormLabel htmlFor="prompt-input" className="text-lg font-semibold">Enter Your Prompt</FormLabel>
+                <FormLabel htmlFor="prompt-input" className="text-lg font-semibold">Enter Your Core Prompt</FormLabel>
                 <FormControl>
                   <Textarea
                     id="prompt-input"
                     placeholder="e.g., Write a short story about a robot who discovers music..."
                     className="min-h-[150px] resize-y text-base shadow-sm focus:ring-primary focus:border-primary"
                     {...field}
-                    aria-label="Prompt input for LLM evaluation"
+                    aria-label="Core prompt for text generation"
                   />
                 </FormControl>
                 <FormDescription>
-                  Enter the prompt you want the AI judges to evaluate.
+                  This is the main topic or instruction for the text generation.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
+              name="targetLength"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="targetLength-input">Target Length</FormLabel>
+                  <FormControl>
+                    <Input 
+                      id="targetLength-input"
+                      placeholder="e.g., approx 300 words" 
+                      {...field} 
+                      className="shadow-sm focus:ring-primary focus:border-primary"
+                      aria-label="Target length for generated text"
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Describe the desired length (e.g., "a short paragraph", "about 500 words").
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="style"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="style-select">Style/Tone</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} name={field.name}>
+                    <FormControl>
+                      <SelectTrigger id="style-select" className="shadow-sm focus:ring-primary focus:border-primary" aria-label="Style or tone for generated text">
+                        <SelectValue placeholder="Select a style" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {styleOptions.map(option => (
+                        <SelectItem key={option} value={option}>{option}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                   <FormDescription>
+                    Choose the desired style for the generated text.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          
           <Button type="submit" disabled={isPending} className="w-full md:w-auto text-lg py-3 px-6 shadow-md hover:shadow-lg transition-shadow">
             {isPending ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Rating...
+                Processing...
               </>
             ) : (
               <>
-                <Zap className="mr-2 h-5 w-5" />
-                Rate Prompt
+                <PenTool className="mr-2 h-5 w-5" />
+                Generate & Evaluate
               </>
             )}
           </Button>
@@ -122,11 +207,19 @@ export function LlmJudgeForm() {
         </Alert>
       )}
 
-      {results && submittedPrompt && (
+      {generatedText && originalPrompt && ratings && (
         <div className="space-y-6">
-          <ResultsDisplay results={results} prompt={submittedPrompt} />
+          <ResultsDisplay 
+            originalPrompt={originalPrompt} 
+            generatedText={generatedText} 
+            ratings={ratings} 
+          />
           <div className="text-center mt-8">
-            <ExportButton prompt={submittedPrompt} results={results} />
+            <ExportButton 
+              originalPrompt={originalPrompt} 
+              generatedText={generatedText} 
+              results={ratings} 
+            />
           </div>
         </div>
       )}

@@ -1,10 +1,11 @@
+
 export type SiteConfig = typeof siteConfig;
 
 export const siteConfig = {
-  name: "LLM Judge",
-  description: "Benchmark large language models with a panel of AI judges: Llama, DeepSeek, and Mistral.",
+  name: "Long-Text Generator & Evaluator",
+  description: "Generate controlled long-form text using an LLM and evaluate it with AI judges and quality metrics.",
   disclaimer: {
-    title: "Usage Instructions & Disclaimer",
-    text: "Enter a prompt in the text area below and click 'Rate Prompt'. Our panel of AI judges (distilled versions of Llama, DeepSeek, and Mistral) will evaluate your prompt on a scale of 1 to 10. Please note: these evaluations are performed in a sandboxed local environment. The ratings might not be fully representative of actual performance on full-scale models due to limitations with local compute resources and model distillation. This tool is intended for comparative insights and educational purposes.",
+    title: "Controllable Long-Text Generation: Instructions & Disclaimer",
+    text: "Define a prompt and control conditions (target length, style). The system will generate text attempting to meet these constraints. Afterwards, AI judges (simulated Llama, DeepSeek, Mistral) will score the generated text. Implementation follows a pipeline: (1) User provides prompt + controls, (2) LLM generates text, (3) AI judges evaluate the text. Results (generated text and scores) are displayed. Please note: Constraint adherence (e.g., exact word count) is an instruction to the LLM and not strictly enforced by automated checkers in this version. This tool is for exploring controllable generation and AI-based evaluation.",
   },
 };

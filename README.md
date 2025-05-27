@@ -1,5 +1,4 @@
-# Firebase Studio
+# LLM Benchmark
 
-This is a NextJS starter in Firebase Studio.
-
-To get started, take a look at src/app/page.tsx.
+This is a NextJS starter in Firebase Studio. 
+This web app aims to try and benchmark generated Gemini prompts with Llama, DeepSeek, and Mistral.

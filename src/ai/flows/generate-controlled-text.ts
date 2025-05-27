@@ -1,20 +1,18 @@
-
 'use server';
 /**
- * @fileOverview A Genkit flow for generating text based on a prompt and control conditions.
- *
- * - generateControlledText - A function that handles the controlled text generation process.
- * - GenerateControlledTextInput - The input type for the generateControlledText function.
- * - GenerateControlledTextOutput - The return type for the generateControlledText function.
+ * @fileOverview A flow for generating text based on a prompt and control conditions.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import dotenv from 'dotenv';
+import { z } from 'zod';
+
+// Load environment variables
+dotenv.config();
 
 const GenerateControlledTextInputSchema = z.object({
   prompt: z.string().describe('The main prompt or topic for text generation.'),
   targetLength: z.string().optional().describe('A description of the desired length (e.g., "around 500 words", "a short paragraph").'),
-  style: z.string().optional().describe('The desired style or tone of the text (e.g., "Formal", "Humorous", "Technical").0'),
+  style: z.string().optional().describe('The desired style or tone of the text (e.g., "Formal", "Humorous", "Technical").'),
 });
 export type GenerateControlledTextInput = z.infer<typeof GenerateControlledTextInputSchema>;
 
@@ -23,54 +21,63 @@ const GenerateControlledTextOutputSchema = z.object({
 });
 export type GenerateControlledTextOutput = z.infer<typeof GenerateControlledTextOutputSchema>;
 
-export async function generateControlledText(input: GenerateControlledTextInput): Promise<GenerateControlledTextOutput> {
-  return generateTextFlow(input);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+if (!GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY environment variable is not set');
 }
 
-const generationPrompt = ai.definePrompt({
-  name: 'generateControlledTextPrompt',
-  input: {schema: GenerateControlledTextInputSchema},
-  output: {schema: GenerateControlledTextOutputSchema},
-  prompt: `You are a helpful assistant that generates text based on user requirements.
-The user wants you to write about: "{{prompt}}"
+async function callGeminiAPI(prompt: string): Promise<string> {
+  const escapedPrompt = prompt.replace(/"/g, '\\"');
+  const options: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: `{"contents":[{"parts":[{"text":"${escapedPrompt}"}]}],"generationConfig":{"temperature":0.7,"topK":40,"topP":0.95,"maxOutputTokens":2048}}`,
+  };
 
-{{#if style}}
-The text should be in a "{{style}}" style.
-{{/if}}
+  console.log('Gemini request body:', options.body);
 
-{{#if targetLength}}
-The text should be approximately "{{targetLength}}" long.
-{{/if}}
+  const response: Response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, options);
 
-Please generate the text. Ensure the output is only the generated text itself, without any preamble or additional explanations.
-`,
-});
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    console.error('Gemini error response:', errorData);
+    throw new Error(`Gemini API error: ${response.statusText}${errorData ? ` - ${JSON.stringify(errorData)}` : ''}`);
+  }
 
-const generateTextFlow = ai.defineFlow(
-  {
-    name: 'generateTextFlow',
-    inputSchema: GenerateControlledTextInputSchema,
-    outputSchema: GenerateControlledTextOutputSchema,
-  },
-  async (input) => {
-    const {output} = await generationPrompt(input);
-    // Assuming the model directly outputs the text as per the schema.
-    // If the model wraps it, e.g. { generatedText: "..." }, this needs to be just output.generatedText
-    if (output && typeof output.generatedText === 'string') {
-      return { generatedText: output.generatedText };
-    }
-    // Fallback if the model output is just a string (less likely with output schema)
-    if (typeof output === 'string') {
-       return { generatedText: output };
-    }
-    // If the output is an object but not matching the schema, try to extract if possible or handle error
-    // For simplicity, we expect the model to adhere to the output schema.
-    // The prompt asks for `output.schema: GenerateControlledTextOutputSchema` which defines generatedText.
-    // So, `output.generatedText` should be correct.
-    if (output && (output as any).generatedText) {
-      return { generatedText: (output as any).generatedText };
+  const data: any = await response.json();
+  console.log('Gemini full response:', data);
+  console.log('Gemini generated text:', data.candidates?.[0]?.content?.parts?.[0]?.text);
+
+  if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+    throw new Error('Invalid response from Gemini API');
+  }
+  
+  return data.candidates[0].content.parts[0].text;
+}
+
+export async function generateControlledText(input: GenerateControlledTextInput): Promise<GenerateControlledTextOutput> {
+  try {
+    let prompt = `You are a helpful assistant that generates text based on user requirements. Write about: "${input.prompt}"\n\n`;
+    
+    if (input.style) {
+      prompt += `The text should be in a "${input.style}" style.\n`;
     }
     
-    throw new Error('Failed to get structured output for generated text.');
+    if (input.targetLength) {
+      prompt += `The text should be approximately "${input.targetLength}" long.\n`;
+    }
+
+    prompt += '\nRespond with only the generated text, without any preamble or additional explanations.';
+
+    console.log('Final prompt for Gemini:', prompt);
+    const generatedText = await callGeminiAPI(prompt);
+    console.log('Final generated text:', generatedText);
+    return { generatedText };
+  } catch (error) {
+    console.error('Error generating text:', error);
+    throw error;
   }
-);
+}

@@ -1,53 +1,121 @@
 'use server';
 
 /**
- * @fileOverview This file defines a Genkit flow for rating a prompt using Llama, DeepSeek, and Mistral distilled models.
- *
- * - ratePrompt - A function that takes a prompt as input and returns ratings from the three models.
- * - RatePromptInput - The input type for the ratePrompt function.
- * - RatePromptOutput - The return type for the ratePrompt function.
+ * @fileOverview This file defines a flow for rating a prompt using Perplexity's Sonar and R1-1776 models.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import dotenv from 'dotenv';
+import { z } from 'zod';
 
-const RatePromptInputSchema = z.object({
-  prompt: z.string().describe('The prompt to be rated by the LLMs.'),
-});
-export type RatePromptInput = z.infer<typeof RatePromptInputSchema>;
+// Load environment variables
+dotenv.config();
 
-const RatePromptOutputSchema = z.object({
-  llamaRating: z.number().describe('The rating from the Llama model (1-10).'),
-  deepSeekRating: z.number().describe('The rating from the DeepSeek model (1-10).'),
-  mistralRating: z.number().describe('The rating from the Mistral model (1-10).'),
-});
-export type RatePromptOutput = z.infer<typeof RatePromptOutputSchema>;
-
-export async function ratePrompt(input: RatePromptInput): Promise<RatePromptOutput> {
-  return ratePromptFlow(input);
+interface ChatMessage {
+  role: 'system' | 'user';
+  content: string;
 }
 
-const prompt = ai.definePrompt({
-  name: 'ratePromptPrompt',
-  input: {schema: RatePromptInputSchema},
-  output: {schema: RatePromptOutputSchema},
-  prompt: `You are a panel of expert judges that can be used for Benchmarking other large language models.
+interface ChatRequest {
+  model: string;
+  messages: ChatMessage[];
+}
 
-You will use the input prompt to evaluate the prompt, and assign a rating from 1 to 10.
-
-Rate Llama, DeepSeek and Mistral distilled models.
-
-Prompt: {{{prompt}}}`,
+const RatePromptInputSchema = z.object({
+  prompt: z.string(),
+  generatedText: z.string(),
 });
 
-const ratePromptFlow = ai.defineFlow(
-  {
-    name: 'ratePromptFlow',
-    inputSchema: RatePromptInputSchema,
-    outputSchema: RatePromptOutputSchema,
-  },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
+const RatingSchema = z.object({
+  clarity: z.number().min(1).max(10),
+  relevance: z.number().min(1).max(10),
+  coherence: z.number().min(1).max(10),
+  creativity: z.number().min(1).max(10),
+  overall: z.number().min(1).max(10),
+});
+
+const RatePromptOutputSchema = z.object({
+  sonar: RatingSchema,
+  r1: RatingSchema,
+});
+
+type RatePromptInput = z.infer<typeof RatePromptInputSchema>;
+type RatePromptOutput = z.infer<typeof RatePromptOutputSchema>;
+
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+
+if (!PERPLEXITY_API_KEY) {
+  throw new Error('PERPLEXITY_API_KEY environment variable is not set');
+}
+
+async function getModelRating(model: string, prompt: string, generatedText: string): Promise<z.infer<typeof RatingSchema>> {
+  const bodyObj: ChatRequest = {
+    model: model,
+    messages: [
+      {
+        role: "system",
+        content: "You are an expert AI prompt evaluator. Rate the following prompt and its generated text on a scale of 1-10 for each criterion. Respond with ONLY a JSON object containing the ratings."
+      },
+      {
+        role: "user",
+        content: `Prompt: ${prompt}\n\nGenerated Text: ${generatedText}\n\nRate the prompt and its generated text on:\n1. Clarity (how clear and understandable the prompt is)\n2. Relevance (how well the generated text matches the prompt)\n3. Coherence (how logical and well-structured the generated text is)\n4. Creativity (how original and imaginative the generated text is)\n5. Overall (overall quality of both prompt and generated text)\n\nRespond with ONLY a JSON object in this exact format:\n{"clarity": number,"relevance": number,"coherence": number,"creativity": number,"overall": number}`
+      }
+    ]
+  };
+
+  const options: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(bodyObj)
+  };
+
+  const response: Response = await fetch('https://api.perplexity.ai/chat/completions', options);
+  const data: any = await response.json();
+
+  if (!response.ok) {
+    console.error('Perplexity API error:', data);
+    throw new Error(data.error?.message || 'Failed to get rating from Perplexity API');
   }
-);
+
+  try {
+    const content = data.choices[0].message.content;
+    console.log(`Raw API response from ${model}:`, content);
+    
+    // Extract JSON from the response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON found in response');
+    }
+    
+    const ratings = JSON.parse(jsonMatch[0]);
+    console.log(`Parsed ratings from ${model}:`, ratings);
+    
+    // Validate ratings
+    const result = RatingSchema.parse(ratings);
+    return result;
+  } catch (error) {
+    console.error(`Error parsing ratings from ${model}:`, error);
+    throw new Error(`Failed to parse ratings from ${model} response`);
+  }
+}
+
+export async function ratePrompt(input: RatePromptInput): Promise<RatePromptOutput> {
+  const { prompt, generatedText } = input;
+
+  try {
+    const [sonarRatings, r1Ratings] = await Promise.all([
+      getModelRating('sonar', prompt, generatedText),
+      getModelRating('r1-1776', prompt, generatedText)
+    ]);
+
+    return {
+      sonar: sonarRatings,
+      r1: r1Ratings
+    };
+  } catch (error) {
+    console.error('Error getting ratings:', error);
+    throw error;
+  }
+}

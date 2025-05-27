@@ -1,13 +1,16 @@
-
 'use client';
 
+import { generateControlledText } from '@/ai/flows/generate-controlled-text';
+import { ratePrompt } from '@/ai/flows/llm-rating';
+import { type RatePromptOutput } from '@/ai/flows/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { useState, useTransition } from 'react';
-import { ratePrompt, type RatePromptOutput } from '@/ai/flows/llm-rating';
-import { generateControlledText, type GenerateControlledTextOutput } from '@/ai/flows/generate-controlled-text';
 
+import { ExportButton } from '@/components/export-button';
+import { ResultsDisplay } from '@/components/results-display';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -18,14 +21,11 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { ResultsDisplay } from '@/components/results-display';
-import { ExportButton } from '@/components/export-button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, Zap, Loader2, PenTool } from 'lucide-react';
+import { Loader2, PenTool, Terminal } from 'lucide-react';
 
 const formSchema = z.object({
   prompt: z.string().min(10, {
@@ -57,6 +57,7 @@ export function LlmJudgeForm() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    console.log('Form submitted with values:', values);
     setError(null);
     setRatings(null);
     setGeneratedText(null);
@@ -68,11 +69,19 @@ export function LlmJudgeForm() {
           title: 'Generating Text...',
           description: 'The AI is crafting your text based on the controls.',
         });
+        console.log('Calling generateControlledText with:', {
+          prompt: values.prompt,
+          targetLength: values.targetLength,
+          style: values.style,
+        });
+        
         const generationResult = await generateControlledText({
           prompt: values.prompt,
           targetLength: values.targetLength,
           style: values.style,
         });
+        
+        console.log('Generation result:', generationResult);
         
         if (!generationResult || !generationResult.generatedText) {
           throw new Error('Text generation failed to produce content.');
@@ -85,7 +94,15 @@ export function LlmJudgeForm() {
           description: 'Now, AI judges are evaluating the generated text.',
         });
 
-        const aiRatings = await ratePrompt({ prompt: generationResult.generatedText });
+        console.log('Calling ratePrompt with:', {
+          prompt: values.prompt,
+          generatedText: generationResult.generatedText
+        });
+        const aiRatings = await ratePrompt({ 
+          prompt: values.prompt,
+          generatedText: generationResult.generatedText 
+        });
+        console.log('AI ratings result:', aiRatings);
         setRatings(aiRatings);
         
         toast({

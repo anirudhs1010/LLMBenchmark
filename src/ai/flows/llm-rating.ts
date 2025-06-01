@@ -47,6 +47,8 @@ if (!PERPLEXITY_API_KEY) {
   throw new Error('PERPLEXITY_API_KEY environment variable is not set');
 }
 
+// This helper function sends a prompt and generated text to a specific Perplexity model (sonar or r1-1776),
+// asks for a detailed rating, and parses the response as a JSON object with all the rating categories.
 async function getModelRating(model: string, prompt: string, generatedText: string): Promise<z.infer<typeof RatingSchema>> {
   const bodyObj: ChatRequest = {
     model: model,
@@ -101,6 +103,9 @@ async function getModelRating(model: string, prompt: string, generatedText: stri
   }
 }
 
+// This is the main function that takes the user's prompt and generated text,
+// gets ratings from both Perplexity Sonar and R1-1776 models in parallel,
+// and returns a combined result with all rating categories for both models.
 export async function ratePrompt(input: RatePromptInput): Promise<RatePromptOutput> {
   const { prompt, generatedText } = input;
 

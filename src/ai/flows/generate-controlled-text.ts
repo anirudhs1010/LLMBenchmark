@@ -27,6 +27,8 @@ if (!GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY environment variable is not set');
 }
 
+// This function calls the Gemini API to generate text based on the user's prompt and controls.
+// It escapes quotes in the prompt, builds the request, and returns the generated text.
 async function callGeminiAPI(prompt: string): Promise<string> {
   const escapedPrompt = prompt.replace(/"/g, '\\"');
   const options: RequestInit = {
@@ -58,6 +60,9 @@ async function callGeminiAPI(prompt: string): Promise<string> {
   return data.candidates[0].content.parts[0].text;
 }
 
+// This is the main function that takes the user's input (prompt, style, length),
+// builds a prompt for the LLM, calls Gemini, and returns the generated text.
+// It also logs useful debug info for troubleshooting.
 export async function generateControlledText(input: GenerateControlledTextInput): Promise<GenerateControlledTextOutput> {
   try {
     let prompt = `You are a helpful assistant that generates text based on user requirements. Write about: "${input.prompt}"\n\n`;

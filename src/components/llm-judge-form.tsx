@@ -13,13 +13,13 @@ import { ResultsDisplay } from '@/components/results-display';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+    Form,
+    FormControl,
+    FormDescription,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,9 +40,17 @@ const formSchema = z.object({
 const styleOptions = ["Neutral", "Formal", "Humorous", "Creative", "Technical", "Persuasive", "Informative"];
 
 export function LlmJudgeForm() {
-  const [ratings, setRatings] = useState<RatePromptOutput | null>(null);
-  const [generatedText, setGeneratedText] = useState<string | null>(null);
-  const [originalPrompt, setOriginalPrompt] = useState<string | null>(null);
+  const [currentRatings, setCurrentRatings] = useState<RatePromptOutput | null>(null);
+  const [currentGeneratedText, setCurrentGeneratedText] = useState<string | null>(null);
+  const [currentPrompt, setCurrentPrompt] = useState<string | null>(null);
+  
+  // Separate arrays for each piece of data
+  const [prompts, setPrompts] = useState<string[]>([]);
+  const [generatedTexts, setGeneratedTexts] = useState<string[]>([]);
+  const [targetLengths, setTargetLengths] = useState<string[]>([]);
+  const [styles, setStyles] = useState<string[]>([]);
+  const [allRatings, setAllRatings] = useState<RatePromptOutput[]>([]);
+  
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -59,9 +67,9 @@ export function LlmJudgeForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     console.log('Form submitted with values:', values);
     setError(null);
-    setRatings(null);
-    setGeneratedText(null);
-    setOriginalPrompt(null);
+    setCurrentRatings(null);
+    setCurrentGeneratedText(null);
+    setCurrentPrompt(null);
 
     startTransition(async () => {
       try {
@@ -86,8 +94,8 @@ export function LlmJudgeForm() {
         if (!generationResult || !generationResult.generatedText) {
           throw new Error('Text generation failed to produce content.');
         }
-        setGeneratedText(generationResult.generatedText);
-        setOriginalPrompt(values.prompt);
+        setCurrentGeneratedText(generationResult.generatedText);
+        setCurrentPrompt(values.prompt);
 
         toast({
           title: 'Text Generated!',
@@ -103,7 +111,14 @@ export function LlmJudgeForm() {
           generatedText: generationResult.generatedText 
         });
         console.log('AI ratings result:', aiRatings);
-        setRatings(aiRatings);
+        setCurrentRatings(aiRatings);
+
+        // Add each piece of data to its respective array
+        setPrompts(prev => [...prev, values.prompt]);
+        setGeneratedTexts(prev => [...prev, generationResult.generatedText]);
+        setTargetLengths(prev => [...prev, values.targetLength || '']);
+        setStyles(prev => [...prev, values.style || '']);
+        setAllRatings(prev => [...prev, aiRatings]);
         
         toast({
           title: 'Success!',
@@ -224,18 +239,25 @@ export function LlmJudgeForm() {
         </Alert>
       )}
 
-      {generatedText && originalPrompt && ratings && (
+      {currentGeneratedText && currentPrompt && currentRatings && (
         <div className="space-y-6">
           <ResultsDisplay 
-            originalPrompt={originalPrompt} 
-            generatedText={generatedText} 
-            ratings={ratings} 
+            originalPrompt={currentPrompt} 
+            generatedText={currentGeneratedText} 
+            ratings={currentRatings} 
           />
           <div className="text-center mt-8">
             <ExportButton 
-              originalPrompt={originalPrompt} 
-              generatedText={generatedText} 
-              results={ratings} 
+              originalPrompt={currentPrompt} 
+              generatedText={currentGeneratedText} 
+              results={currentRatings}
+              allPrompts={prompts}
+              allGeneratedTexts={generatedTexts}
+              allTargetLengths={targetLengths}
+              allStyles={styles}
+              allRatings={allRatings}
+              targetLength={form.getValues('targetLength') || ''}
+              style={form.getValues('style') || ''}
             />
           </div>
         </div>

@@ -16,6 +16,7 @@ export const RatePromptInputSchema = z.object({
 export const RatePromptOutputSchema = z.object({
   sonar: RatingSchema,
   r1: RatingSchema,
+  llama: RatingSchema,
 });
 
 export type Rating = z.infer<typeof RatingSchema>;

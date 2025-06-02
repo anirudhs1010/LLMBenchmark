@@ -13,15 +13,15 @@ export function LlmJudgeLogo(props: SVGProps<SVGSVGElement>) {
       <rect width="100" height="100" rx="15" fill="hsl(var(--primary))" />
       <text
         x="50%"
-        y="52%" 
+        y="55%" 
         dominantBaseline="middle"
         textAnchor="middle"
         fontFamily="var(--font-geist-sans), Arial, sans-serif"
-        fontSize="50"
+        fontSize="32"
         fontWeight="bold"
         fill="hsl(var(--primary-foreground))"
       >
-        J
+        LLM
       </text>
     </svg>
   );

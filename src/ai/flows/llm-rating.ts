@@ -177,7 +177,7 @@ export async function ratePrompt(input: RatePromptInput): Promise<RatePromptOutp
   try {
     const [sonarRatings, r1Ratings, llamaRatings] = await Promise.all([
       getModelRating('sonar', prompt, generatedText),
-      getModelRating('r1', prompt, generatedText),
+      getModelRating('r1-1776', prompt, generatedText),
       getLlamaRating(prompt, generatedText)
     ]);
 

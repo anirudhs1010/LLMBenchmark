@@ -9,6 +9,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { ExportButton } from '@/components/export-button';
+import { RatingsBarChart } from '@/components/ratings-bar-chart';
 import { ResultsDisplay } from '@/components/results-display';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ export function LlmJudgeForm() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const [showChart, setShowChart] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -246,7 +248,7 @@ export function LlmJudgeForm() {
             generatedText={currentGeneratedText} 
             ratings={currentRatings} 
           />
-          <div className="text-center mt-8">
+          <div className="text-center mt-8 flex flex-col items-center gap-4">
             <ExportButton 
               originalPrompt={currentPrompt} 
               generatedText={currentGeneratedText} 
@@ -259,6 +261,19 @@ export function LlmJudgeForm() {
               targetLength={form.getValues('targetLength') || ''}
               style={form.getValues('style') || ''}
             />
+            <Button onClick={() => setShowChart(v => !v)} variant="outline" className="mt-2">
+              {showChart ? 'Hide Bar Chart' : 'Show Bar Chart'}
+            </Button>
+            {showChart && (
+              <div className="w-full max-w-4xl mx-auto mt-4">
+                <RatingsBarChart 
+                  prompts={prompts}
+                  llamaScores={allRatings.map(r => r.llama?.overall ?? 0)}
+                  sonarScores={allRatings.map(r => r.sonar?.overall ?? 0)}
+                  r1Scores={allRatings.map(r => r.r1?.overall ?? 0)}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
